@@ -10,13 +10,8 @@ class OntologyRepository:
     # Получение онтологии
     # -----------------------
     def get_ontology(self) -> List[Dict[str, Any]]:
-        """Получить всю онтологию (все классы, атрибуты и связи)"""
-        query = """
-        MATCH (c:Class)
-        OPTIONAL MATCH (c)-[r]->(m)
-        RETURN c, r, m
-        """
-        return self.repo.run_custom_query(query)
+        """Получить всю онтологию (узлы + дуги)"""
+        return self.repo.get_all_nodes_and_arcs()
 
     def get_ontology_parent_classes(self) -> List[Dict[str, Any]]:
         """Получить классы онтологии без родителей"""
@@ -68,7 +63,8 @@ class OntologyRepository:
         MATCH (c:Class {uri: $uri})
         OPTIONAL MATCH (c)<-[:SUBCLASS_OF*]-(sub:Class)
         OPTIONAL MATCH (c)<-[:INSTANCE_OF*]-(o:Object)
-        DETACH DELETE c, sub, o
+        OPTIONAL MATCH (c)<-[:DOMAIN|RANGE]-(prop)
+        DETACH DELETE c, sub, o, prop
         """
         self.repo.run_custom_query(query, {"uri": class_uri})
         return True
@@ -107,13 +103,30 @@ class OntologyRepository:
     def delete_object(self, object_uri: str) -> bool:
         return self.repo.delete_node_by_uri(object_uri)
 
-    def create_object(self, class_uri: str, props: Dict[str, Any]) -> Dict[str, Any]:
+    def create_object(self, class_uri: str, props: Dict[str, Any], obj_params: Optional[List[Dict[str, Any]]] = None) -> \
+    Dict[str, Any]:
         obj = self.repo.create_node(props, ["Object"])
         self.repo.create_arc(obj["uri"], class_uri, "INSTANCE_OF")
+
+        if obj_params:
+            for param in obj_params:
+                target = param.get("target_uri")
+                arc_type = param.get("type", "RELATED")
+                if target:
+                    self.repo.create_arc(obj["uri"], target, arc_type)
+
         return obj
 
-    def update_object(self, object_uri: str, props: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        return self.repo.update_node(object_uri, props)
+    def update_object(self, object_uri: str, props: Dict[str, Any],
+                      obj_params: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
+        obj = self.repo.update_node(object_uri, props)
+        if obj and obj_params:
+            for param in obj_params:
+                target = param.get("target_uri")
+                arc_type = param.get("type", "RELATED")
+                if target:
+                    self.repo.create_arc(object_uri, target, arc_type)
+        return obj
 
     # -----------------------
     # Signature
