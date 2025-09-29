@@ -110,12 +110,6 @@ class Neo4jRepository:
             res = session.run(query)
             return [self.collect_node(r["n"]) for r in res]
 
-    def get_node_by_uri(self, uri: str) -> Optional[TNode]:
-        query = "MATCH (n {`uri`: $uri}) RETURN n LIMIT 1"
-        with self.driver.session() as session:
-            rec = session.run(query, uri=uri).single()
-            return self.collect_node(rec["n"]) if rec else None
-
     def update_node(self, uri: str, props: Dict[str, Any]) -> Optional[TNode]:
         set_str = ", ".join(f"n.`{k}` = ${k}" for k in props.keys())
         query = f"MATCH (n {{`uri`: $uri}}) SET {set_str} RETURN n"
@@ -149,6 +143,41 @@ class Neo4jRepository:
         with self.driver.session() as session:
             rec = session.run(query, id=arc_id).single()
             return rec["cnt"] > 0 if rec else False
+
+    def get_node_by_uri(self, uri: str) -> Optional[TNode]:
+        """
+        Получить узел по URI вместе со всеми связями (входящими и исходящими).
+        Возвращает None, если узел не найден.
+        """
+        query = """
+        MATCH (n {uri: $uri})
+        OPTIONAL MATCH (n)-[r]-(m)
+        RETURN n, r, m
+        """
+        arcs = []
+        node_obj = None
+        with self.driver.session() as session:
+            res = session.run(query, uri=uri)
+            for record in res:
+                # первый раз сохраняем сам объект Node (нативный)
+                if node_obj is None:
+                    node_obj = record["n"]
+                # r может быть None (если у узла нет связей) или Relationship
+                r = record.get("r")
+                if r is not None:
+                    collected = self.collect_arc(r)
+                    if collected:
+                        # защитимся от дублей по element_id
+                        if not any(a.get("id") == collected.get("id") and a.get("uri") == collected.get("uri") for a in
+                                   arcs):
+                            arcs.append(collected)
+
+        if node_obj is None:
+            return None
+
+        result = self.collect_node(node_obj)
+        result["arcs"] = arcs
+        return result
 
     # -----------------------
     # Произвольные запросы
