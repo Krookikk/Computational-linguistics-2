@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional
-from neo4j_repository import Neo4jRepository
+
+from lab1.neo4j_repository import Neo4jRepository
 
 
 class OntologyRepository:
