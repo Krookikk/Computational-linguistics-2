@@ -1,0 +1,2 @@
+def similarity():
+    return None

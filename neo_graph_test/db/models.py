@@ -6,9 +6,9 @@ from sentence_transformers import SentenceTransformer
 
 from db.api.EmbeddingUtils import EmbeddingUtils
 
-embedding_model = SentenceTransformer(
-    "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-)
+# embedding_model = SentenceTransformer(
+#     "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+# )
 
 class Test(models.Model):
     name = models.TextField()
